@@ -1,15 +1,17 @@
 import express from 'express';
-import fetch from 'node-fetch';
-import sharp from 'sharp';
-import fs from 'fs';
-import path from 'path';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
+import sharp from 'sharp';
 import { fileURLToPath } from 'url';
+import Replicate from 'replicate';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '.env') });
+
+console.log("? Token loaded:", process.env.REPLICATE_API_TOKEN);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -23,8 +25,12 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use('/gallery', express.static(galleryPath));
 
+const replicate = new Replicate({
+  auth: process.env.REPLICATE_API_TOKEN
+});
+
 app.get('/', (req, res) => {
-  res.send('AI Gallery backend is running.');
+  res.send('AI Gallery backend is running (with SDK).');
 });
 
 app.post('/generate', async (req, res) => {
@@ -32,54 +38,21 @@ app.post('/generate', async (req, res) => {
   if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
 
   const filteredPrompt = `fine art painting style, ${prompt}`;
-  console.log('Generating:', filteredPrompt);
+  console.log('Generating via SDK:', filteredPrompt);
 
   try {
-    const response = await fetch("https://api.replicate.com/v1/predictions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        version: "342351808b401109da250c5998d4299f9e1cbcab566c12bb42785f21414a2321", // SD 3.5 Turbo with aspect ratio
+    const output = await replicate.run(
+      "stability-ai/sdxl",
+      {
         input: {
           prompt: filteredPrompt,
-          aspect_ratio: "16:9"
-        }
-      })
-    });
-
-    const replicateResult = await response.json();
-
-    if (replicateResult?.error) {
-      return res.status(500).json({ error: replicateResult.error });
-    }
-
-    const predictionId = replicateResult.id;
-
-    const getImageUrl = async () => {
-      let imageUrl = null;
-      while (!imageUrl) {
-        const poll = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
-          headers: {
-            Authorization: `Token ${process.env.REPLICATE_API_TOKEN}`
-          }
-        });
-        const status = await poll.json();
-        console.log("Polling status:", status.status);
-        if (status.status === "succeeded") {
-          imageUrl = status.output[0];
-        } else if (status.status === "failed") {
-          throw new Error("Image generation failed");
-        } else {
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          width: 1024,
+          height: 576
         }
       }
-      return imageUrl;
-    };
+    );
 
-    const imageUrl = await getImageUrl();
+    const imageUrl = output[0];
     const filename = `img-${Date.now()}.jpg`;
     const localPath = path.join(galleryPath, filename);
 
@@ -93,8 +66,9 @@ app.post('/generate', async (req, res) => {
     limitGalleryImages();
 
     res.json({ imageUrl: `/gallery/${filename}` });
+
   } catch (err) {
-    console.error("Generation error:", err);
+    console.error("SDK generation error:", err);
     res.status(500).json({ error: "Failed to generate image." });
   }
 });
@@ -128,5 +102,5 @@ function limitGalleryImages() {
 }
 
 app.listen(PORT, () => {
-  console.log(`🎨 AI Gallery Server running on port ${PORT}`);
+  console.log(`? AI Gallery Server (SDK) running on port ${PORT}`);
 });
