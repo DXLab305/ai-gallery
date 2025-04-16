@@ -24,55 +24,62 @@ app.use(bodyParser.json());
 app.use('/gallery', express.static(galleryPath));
 
 app.get('/', (req, res) => {
-  res.send('🎨 OpenAI Gallery server is running!');
+  res.send('🎨 AI Gallery backend is running with OpenAI + layout enforcement.');
 });
 
 app.post('/generate', async (req, res) => {
   const { prompt } = req.body;
   if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
 
-  console.log('Generating via OpenAI API:', prompt);
+  const filteredPrompt = `a fine art painting of ${prompt}, placed in the top 70% of the canvas, bottom 30% plain black, no border, no frame, cinematic lighting`;
+
+  console.log('Generating:', filteredPrompt);
 
   try {
-    const openaiRes = await fetch("https://api.openai.com/v1/images/generations", {
+    const response = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
       headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: "dall-e-3",
-        prompt,
+        prompt: filteredPrompt,
         n: 1,
-        size: "1024x1024"
+        size: '1024x1024'
       })
     });
 
-    const data = await openaiRes.json();
+    const data = await response.json();
 
-    if (!data?.data?.[0]?.url) {
-      console.error('OpenAI error response:', data);
-      return res.status(500).json({ error: 'OpenAI did not return a valid image URL.' });
+    if (data?.data?.length && data.data[0]?.url) {
+      const imageUrl = data.data[0].url;
+      const filename = `img-${Date.now()}.jpg`;
+      const localPath = path.join(galleryPath, filename);
+
+      const imageRes = await fetch(imageUrl);
+      const buffer = await imageRes.buffer();
+
+      // 🖼 Crop top 70% and add black filler bottom (30%)
+      await sharp(buffer)
+        .extract({ width: 1024, height: 716, top: 0, left: 0 })
+        .extend({
+          bottom: 308,
+          background: { r: 0, g: 0, b: 0 }
+        })
+        .toFile(localPath);
+
+      limitGalleryImages();
+
+      res.json({ imageUrl: `/gallery/${filename}` });
+    } else {
+      const errMsg = data?.error?.message || 'OpenAI did not return an image.';
+      console.error('OpenAI API error:', errMsg);
+      res.status(500).json({ error: errMsg });
     }
 
-    const imageUrl = data.data[0].url;
-    const filename = `img-${Date.now()}.jpg`;
-    const localPath = path.join(galleryPath, filename);
-
-    const imgRes = await fetch(imageUrl);
-    const buffer = await imgRes.buffer();
-
-    // Resize to Samsung Frame (1920x1080) with black bars
-    await sharp(buffer)
-      .resize({ width: 1920, height: 1080, fit: 'contain', background: '#000' })
-      .toFile(localPath);
-
-    limitGalleryImages();
-
-    res.json({ imageUrl: `/gallery/${filename}` });
   } catch (err) {
-    console.error('OpenAI generation failed:', err);
-    res.status(500).json({ error: 'Failed to generate image.' });
+    console.error("Generation error:", err);
+    res.status(500).json({ error: "Failed to generate image." });
   }
 });
 
@@ -105,5 +112,5 @@ function limitGalleryImages() {
 }
 
 app.listen(PORT, () => {
-  console.log(`✅ AI Gallery (OpenAI) server running on port ${PORT}`);
+  console.log(`🎨 AI Gallery Server running on port ${PORT}`);
 });
