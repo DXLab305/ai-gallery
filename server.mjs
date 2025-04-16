@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
-import fetch from 'node-fetch'; // Needed to fetch the image buffer
+import fetch from 'node-fetch';
 import { fileURLToPath } from 'url';
 import Replicate from 'replicate';
 
@@ -31,7 +31,7 @@ const replicate = new Replicate({
 });
 
 app.get('/', (req, res) => {
-  res.send('AI Gallery backend is running (with SDK).');
+  res.send('AI Gallery backend is running (Turbo model, 1920x1080).');
 });
 
 app.post('/generate', async (req, res) => {
@@ -43,7 +43,7 @@ app.post('/generate', async (req, res) => {
 
   try {
     const output = await replicate.run(
-      "stability-ai/sdxl:db21e45a6f06cdbda5410f9d2a3b6c891d53e5d51d53d9f9a0c82ecf5c3cbf5a",
+      "stability-ai/sdxl-turbo",
       {
         input: {
           prompt: filteredPrompt,
@@ -103,5 +103,5 @@ function limitGalleryImages() {
 }
 
 app.listen(PORT, () => {
-  console.log(`? AI Gallery Server (SDK) running on port ${PORT}`);
+  console.log(`? AI Gallery Server (Turbo) running on port ${PORT}`);
 });
