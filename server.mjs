@@ -31,7 +31,7 @@ const replicate = new Replicate({
 });
 
 app.get('/', (req, res) => {
-  res.send('AI Gallery backend is running (Turbo model, 1920x1080).');
+  res.send('AI Gallery backend is running with stable-diffusion-xl.');
 });
 
 app.post('/generate', async (req, res) => {
@@ -43,7 +43,7 @@ app.post('/generate', async (req, res) => {
 
   try {
     const output = await replicate.run(
-      "stability-ai/sdxl-turbo",
+      "stability-ai/stable-diffusion-xl",
       {
         input: {
           prompt: filteredPrompt,
@@ -52,6 +52,8 @@ app.post('/generate', async (req, res) => {
         }
       }
     );
+
+    console.log("Output from replicate.run:", output);
 
     const imageUrl = output[0];
     const filename = `img-${Date.now()}.jpg`;
@@ -103,5 +105,5 @@ function limitGalleryImages() {
 }
 
 app.listen(PORT, () => {
-  console.log(`? AI Gallery Server (Turbo) running on port ${PORT}`);
+  console.log(`? AI Gallery Server running on port ${PORT}`);
 });
