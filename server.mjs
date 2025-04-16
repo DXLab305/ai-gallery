@@ -15,6 +15,10 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const galleryPath = path.join(__dirname, 'public', 'gallery');
 
+if (!fs.existsSync(galleryPath)) {
+  fs.mkdirSync(galleryPath, { recursive: true });
+}
+
 app.use(cors());
 app.use(bodyParser.json());
 app.use('/gallery', express.static(galleryPath));
@@ -38,11 +42,10 @@ app.post('/generate', async (req, res) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        version: "db21e45a6f06cdbda5410f9d2a3b6c891d53e5d51d53d9f9a0c82ecf5c3cbf5a",
+        version: "342351808b401109da250c5998d4299f9e1cbcab566c12bb42785f21414a2321", // SD 3.5 Turbo with aspect ratio
         input: {
           prompt: filteredPrompt,
-          width: 1920,
-          height: 1080
+          aspect_ratio: "16:9"
         }
       })
     });
@@ -64,6 +67,7 @@ app.post('/generate', async (req, res) => {
           }
         });
         const status = await poll.json();
+        console.log("Polling status:", status.status);
         if (status.status === "succeeded") {
           imageUrl = status.output[0];
         } else if (status.status === "failed") {
