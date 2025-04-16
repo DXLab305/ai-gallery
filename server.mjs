@@ -1,18 +1,15 @@
 import express from 'express';
+import fetch from 'node-fetch';
+import sharp from 'sharp';
+import fs from 'fs';
+import path from 'path';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
-import path from 'path';
-import fs from 'fs';
-import sharp from 'sharp';
-import fetch from 'node-fetch';
 import { fileURLToPath } from 'url';
-import Replicate from 'replicate';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '.env') });
-
-console.log("? Token loaded:", process.env.REPLICATE_API_TOKEN);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -26,53 +23,56 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use('/gallery', express.static(galleryPath));
 
-const replicate = new Replicate({
-  auth: process.env.REPLICATE_API_TOKEN
-});
-
 app.get('/', (req, res) => {
-  res.send('AI Gallery backend is running with stable-diffusion-xl.');
+  res.send('🎨 OpenAI Gallery server is running!');
 });
 
 app.post('/generate', async (req, res) => {
   const { prompt } = req.body;
   if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
 
-  const filteredPrompt = `fine art painting style, ${prompt}`;
-  console.log('Generating via SDK:', filteredPrompt);
+  console.log('Generating via OpenAI API:', prompt);
 
   try {
-    const output = await replicate.run(
-      "stability-ai/stable-diffusion-xl",
-      {
-        input: {
-          prompt: filteredPrompt,
-          width: 1920,
-          height: 1080
-        }
-      }
-    );
+    const openaiRes = await fetch("https://api.openai.com/v1/images/generations", {
+      method: 'POST',
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "dall-e-3",
+        prompt,
+        n: 1,
+        size: "1024x1024"
+      })
+    });
 
-    console.log("Output from replicate.run:", output);
+    const data = await openaiRes.json();
 
-    const imageUrl = output[0];
+    if (!data?.data?.[0]?.url) {
+      console.error('OpenAI error response:', data);
+      return res.status(500).json({ error: 'OpenAI did not return a valid image URL.' });
+    }
+
+    const imageUrl = data.data[0].url;
     const filename = `img-${Date.now()}.jpg`;
     const localPath = path.join(galleryPath, filename);
 
-    const imageRes = await fetch(imageUrl);
-    const buffer = await imageRes.buffer();
+    const imgRes = await fetch(imageUrl);
+    const buffer = await imgRes.buffer();
 
+    // Resize to Samsung Frame (1920x1080) with black bars
     await sharp(buffer)
-      .resize({ width: 1920, height: 1080, fit: "cover" })
+      .resize({ width: 1920, height: 1080, fit: 'contain', background: '#000' })
       .toFile(localPath);
 
     limitGalleryImages();
 
     res.json({ imageUrl: `/gallery/${filename}` });
-
   } catch (err) {
-    console.error("SDK generation error:", err);
-    res.status(500).json({ error: "Failed to generate image." });
+    console.error('OpenAI generation failed:', err);
+    res.status(500).json({ error: 'Failed to generate image.' });
   }
 });
 
@@ -105,5 +105,5 @@ function limitGalleryImages() {
 }
 
 app.listen(PORT, () => {
-  console.log(`? AI Gallery Server running on port ${PORT}`);
+  console.log(`✅ AI Gallery (OpenAI) server running on port ${PORT}`);
 });
