@@ -61,14 +61,10 @@ app.post('/generate', async (req, res) => {
 
       // 🖼 Crop top 70% and add black filler bottom (30%)
       await sharp(buffer)
-        .extract({ width: 1024, height: 716, top: 0, left: 0 })
-        .extend({
-          bottom: 308,
-          background: { r: 0, g: 0, b: 0 }
-        })
-        .toFile(localPath);
-
-      limitGalleryImages();
+  .resize({ width: 1920, height: 1080, fit: "cover" })
+  .toFile(localPath);
+      
+	  limitGalleryImages();
 
       res.json({ imageUrl: `/gallery/${filename}` });
     } else {
